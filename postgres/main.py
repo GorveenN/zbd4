@@ -196,8 +196,6 @@ def parse_args():
     parser.add_argument("--sleep-dur", type=float, default=0.001)
     parser.add_argument("--results")
 
-    print()
-
     return parser.parse_args()
 
 
