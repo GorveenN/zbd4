@@ -2,7 +2,7 @@
 
 declare -a PROCS=( 0.001 0.003 0.006 0.009 )
 
-for p in {1..32}; do
+for p in {1..16}; do
     for i in "${PROCS[@]}"; do
         echo $i
         echo $p

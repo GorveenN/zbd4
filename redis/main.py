@@ -14,7 +14,7 @@ def listener(r: redis.Redis, channels):
     p.get_message()
 
     while True:
-        message = p.get_message(timeout=10)
+        message = p.get_message(timeout=20)
         if message is not None:
             if not isinstance(message["data"], int):
                 yield message

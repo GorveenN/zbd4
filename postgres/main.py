@@ -6,6 +6,7 @@ import argparse
 import sys
 import os
 import select
+import numpy as np
 
 
 def listener(conn, channels):
@@ -13,7 +14,7 @@ def listener(conn, channels):
     for channel in channels:
         cur.execute(f"LISTEN {channel};")
     while True:
-        if select.select([conn], [], [], 10) == ([], [], []):
+        if select.select([conn], [], [], 20) == ([], [], []):
             print("Timeout")
             break
         else:
@@ -51,7 +52,14 @@ def prepare_tables():
         )
 
 
-def process_one(num_iter, sleep_dur, prefix, channel_3_0, channel_3_1, channel_2):
+def process_one(
+    num_iter,
+    sleep_dur,
+    prefix,
+    proc1_proc2,
+    proc1_proc3,
+    more_info_proc3,
+):
     with get_connection() as conn:
         cur = conn.cursor()
         cookie = "ala ma kota"
@@ -63,93 +71,83 @@ def process_one(num_iter, sleep_dur, prefix, channel_3_0, channel_3_1, channel_2
                 f"insert into advert(id, cookie, ip) values ({i}, '{cookie}', '{ip}')"
             )
 
-            type3 = random.choice([0, 1, 2])
-            label2 = random.choice(channel_2)
-            if type3 == 2:
-                cur.execute(f"notify forward_{label2}, '{i}'")
-            elif type3 == 1:
-                label3 = random.choice(channel_3_1)
-                cur.execute(f"notify {label2}, '{i}'")
-                cur.execute(f"notify {label3}, '{i}'")
-            elif type3 == 0:
-                label3 = random.choice(channel_3_0)
-                cur.execute(f"notify {label2}, '{i}'")
-                cur.execute(f"notify {label3}, '{i}'")
+            proc2 = random.choice(proc1_proc2)
+            proc3, proc3_forward = random.choice(
+                list(zip(proc1_proc3, more_info_proc3))
+            )
+
+            cur.execute(f"notify {proc2}, '{i} {proc3_forward}'")
+            cur.execute(f"notify {proc3}, '{i}'")
 
 
-def process_two(channels_in, channels_out):
+def process_two(channel):
     with get_connection() as conn:
         cur = conn.cursor()
-        channels_in = channels_in + ["forward_" + x for x in channels_in]
-        for notification in listener(conn, channels_in):
+        for notification in listener(conn, [channel]):
             city = "warszawa"
             country = "polska"
 
-            cur.execute(f"Select * from advert where id = '{notification.payload}'")
+            id_, forward_channel = notification.payload.split()
+
+            cur.execute(f"Select * from advert where id = '{id_}'")
             cur.execute(
-                f"UPDATE advert SET mod_time = current_timestamp, city = '{city}', country = '{country}' WHERE id = {notification.payload}"
+                f"UPDATE advert SET mod_time = current_timestamp, city = '{city}', country = '{country}' WHERE id = {id_}"
             )
-            if notification.channel.startswith("forward"):
-                label = random.choice(channels_out)
-                cur.execute(f"notify {label}, '{notification.payload}'")
+            cur.execute(f"notify {forward_channel}, '{id_}'")
 
 
-def process_tree_0(channels):
+def process_three(channel1, channel2):
+    def update(cur, num, payload):
+        cur.execute(
+            f"UPDATE advert SET proc_type={num}, end_time = current_timestamp WHERE id = {payload}"
+        )
+
+    need_more_info = set()
     with get_connection() as conn:
         cur = conn.cursor()
-        for notification in listener(conn, channels):
+        for notification in listener(conn, [channel1, channel2]):
             cur.execute(f"Select * from advert where id = '{notification.payload}'")
-            cur.execute(
-                f"UPDATE advert SET proc_type=0, end_time = current_timestamp WHERE id = {notification.payload}"
-            )
+            if notification.channel == channel2:
+                if notification.payload in need_more_info:
+                    need_more_info.remove(notification.payload)
+                    [a] = np.random.choice(2, 1, [0.3, 0.7])
+                    if a == 0:
+                        update(cur, 2, notification.payload)
+                    else:
+                        update(cur, 1, notification.payload)
+            else:
+                [a] = np.random.choice(2, 1, [0.1, 0.9])
+                if a == 0:
+                    update(cur, 0, notification.payload)
+                else:
+                    # check for null
+                    need_more_info.add(notification.payload)
 
 
-def process_tree_1(channels):
-    with get_connection() as conn:
-        cur = conn.cursor()
-        for notification in listener(conn, channels):
-            cur.execute(f"Select * from advert where id = '{notification.payload}'")
-            cur.execute(
-                f"UPDATE advert SET proc_type=1,  end_time = current_timestamp WHERE id = {notification.payload}"
-            )
-
-
-def process_tree_2(channels):
-    with get_connection() as conn:
-        cur = conn.cursor()
-        for notification in listener(conn, channels):
-            cur.execute(f"Select * from advert where id = '{notification.payload}'")
-            cur.execute(
-                f"UPDATE advert SET proc_type=2, end_time = current_timestamp WHERE id = {notification.payload}"
-            )
-
-
-def make_labels(n1, n2, n3, n4):
+def make_labels(n2, n3):
     return (
-        ["q_from_1_to_3_0" + str(x) for x in range(n1)],
-        ["q_from_1_to_3_1" + str(x) for x in range(n2)],
-        ["q_from_1_to_2" + str(x) for x in range(n3)],
-        ["q_from_2_to_3_2" + str(x) for x in range(n4)],
+        ["proc1_proc2_" + str(x) for x in range(n2)],
+        ["proc1_proc3_" + str(x) for x in range(n3)],
+        ["more_info_proc3_" + str(x) for x in range(n3)],
     )
 
 
 def main(args):
     prepare_tables()
     num_proc = args.num_proc
-    num_proc_three = round(0.5 + num_proc / 3)
 
-    q_from_1_to_3_0, q_from_1_to_3_1, q_from_1_to_2, q_from_2_to_3_2 = make_labels(
-        num_proc_three, num_proc_three, num_proc, num_proc_three
-    )
+    (
+        proc1_proc2,
+        proc1_proc3,
+        more_info_proc3,
+    ) = make_labels(num_proc, num_proc)
 
     proc = [
+        [Process(target=process_two, args=(a,)) for a in proc1_proc2],
         [
-            Process(target=process_two, args=(q_from_1_to_2, q_from_2_to_3_2))
-            for _ in range(num_proc)
+            Process(target=process_three, args=a)
+            for a in zip(proc1_proc3, more_info_proc3)
         ],
-        [Process(target=process_tree_0, args=([a],)) for a in q_from_1_to_3_0],
-        [Process(target=process_tree_1, args=([a],)) for a in q_from_1_to_3_1],
-        [Process(target=process_tree_2, args=([a],)) for a in q_from_2_to_3_2],
         [
             Process(
                 target=process_one,
@@ -157,9 +155,9 @@ def main(args):
                     args.num_iter,
                     args.sleep_dur,
                     i * 10000000,
-                    q_from_1_to_3_0,
-                    q_from_1_to_3_1,
-                    q_from_1_to_2,
+                    proc1_proc2,
+                    proc1_proc3,
+                    more_info_proc3,
                 ),
             )
             for i in range(num_proc)
