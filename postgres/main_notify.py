@@ -51,9 +51,7 @@ def prepare_tables():
         )
 
 
-def process_one(
-        num_iter, sleep_dur, prefix, channel_3_0, channel_3_1, channel_2
-):
+def process_one(num_iter, sleep_dur, prefix, channel_3_0, channel_3_1, channel_2):
     with get_connection() as conn:
         cur = conn.cursor()
         cookie = "ala ma kota"
@@ -70,12 +68,12 @@ def process_one(
             if type3 == 2:
                 cur.execute(f"notify forward_{label2}, '{i}'")
             elif type3 == 1:
-                cur.execute(f"notify {label2}, '{i}'")
                 label3 = random.choice(channel_3_1)
+                cur.execute(f"notify {label2}, '{i}'")
                 cur.execute(f"notify {label3}, '{i}'")
             elif type3 == 0:
-                cur.execute(f"notify {label2}, '{i}'")
                 label3 = random.choice(channel_3_0)
+                cur.execute(f"notify {label2}, '{i}'")
                 cur.execute(f"notify {label3}, '{i}'")
 
 
@@ -102,7 +100,7 @@ def process_tree_0(channels):
         for notification in listener(conn, channels):
             cur.execute(f"Select * from advert where id = '{notification.payload}'")
             cur.execute(
-                f"UPDATE advert SET end_time = current_timestamp WHERE id = {notification.payload}"
+                f"UPDATE advert SET proc_type=0, end_time = current_timestamp WHERE id = {notification.payload}"
             )
 
 
@@ -112,7 +110,7 @@ def process_tree_1(channels):
         for notification in listener(conn, channels):
             cur.execute(f"Select * from advert where id = '{notification.payload}'")
             cur.execute(
-                f"UPDATE advert SET end_time = current_timestamp WHERE id = {notification.payload}"
+                f"UPDATE advert SET proc_type=1,  end_time = current_timestamp WHERE id = {notification.payload}"
             )
 
 
@@ -122,7 +120,7 @@ def process_tree_2(channels):
         for notification in listener(conn, channels):
             cur.execute(f"Select * from advert where id = '{notification.payload}'")
             cur.execute(
-                f"UPDATE advert SET end_time = current_timestamp WHERE id = {notification.payload}"
+                f"UPDATE advert SET proc_type=2, end_time = current_timestamp WHERE id = {notification.payload}"
             )
 
 
@@ -181,8 +179,8 @@ def dump_results(args):
         with get_connection() as conn:
             cur = conn.cursor()
             with open(
-                    f"{args.results}/result_{args.num_proc}_{args.num_iter}_{args.sleep_dur}.csv",
-                    "w",
+                f"{args.results}/result_{args.num_proc}_{args.num_iter}_{args.sleep_dur}.csv",
+                "w",
             ) as f:
                 cur.copy_expert(
                     "Copy (Select * From advert) To STDOUT With CSV DELIMITER ',' HEADER;",
