@@ -2,16 +2,24 @@ import psycopg2
 from multiprocessing import Process
 import time
 import random
+import argparse
+import sys
+import os
+import select
 
 
 def listener(conn, channels):
+    cur = conn.cursor()
+    for channel in channels:
+        cur.execute(f"LISTEN {channel};")
     while True:
-        cur = conn.cursor()
-        for channel in channels:
-            cur.execute(f"LISTEN {channel};")
-        conn.poll()
-        while conn.notifies:
-            yield conn.notifies.pop(0)
+        if select.select([conn], [], [], 2) == ([], [], []):
+            print("Timeout")
+            break
+        else:
+            conn.poll()
+            while conn.notifies:
+                yield conn.notifies.pop(0)
 
 
 def get_connection():
@@ -36,37 +44,39 @@ def prepare_tables():
                 country  TEXT,
                 in_time  timestamptz default current_timestamp,
                 mod_time timestamptz,
-                end_time timestamptz
+                end_time timestamptz,
+                proc_type INT
             );
             """
         )
 
 
-def process_one(channel_3_0, channel_3_1, channel_2):
+def process_one(
+        num_iter, sleep_dur, prefix, channel_3_0, channel_3_1, channel_2
+):
     with get_connection() as conn:
         cur = conn.cursor()
         cookie = "ala ma kota"
         ip = "192.168.1.1"
-        for _ in range(1000):
-            time.sleep(0.01)
+        for i in range(num_iter):
+            i = i + prefix
+            time.sleep(sleep_dur)
             cur.execute(
-                f"insert into advert(cookie, ip) values ('{cookie}', '{ip}') returning id"
+                f"insert into advert(id, cookie, ip) values ({i}, '{cookie}', '{ip}')"
             )
 
-            id_ = cur.fetchone()[0]
-            q = random.choice([0, 1, 2])
+            type3 = random.choice([0, 1, 2])
             label2 = random.choice(channel_2)
-            if q == 2:
-                label2 = random.choice(channel_2)
-                cur.execute(f"notify forward_{label2}, '{id_}'")
-            elif q == 1:
-                cur.execute(f"notify {label2}, '{id_}'")
+            if type3 == 2:
+                cur.execute(f"notify forward_{label2}, '{i}'")
+            elif type3 == 1:
+                cur.execute(f"notify {label2}, '{i}'")
                 label3 = random.choice(channel_3_1)
-                cur.execute(f"notify {label3}, '{id_}'")
-            elif q == 0:
-                cur.execute(f"notify {label2}, '{id_}'")
+                cur.execute(f"notify {label3}, '{i}'")
+            elif type3 == 0:
+                cur.execute(f"notify {label2}, '{i}'")
                 label3 = random.choice(channel_3_0)
-                cur.execute(f"notify {label3}, '{id_}'")
+                cur.execute(f"notify {label3}, '{i}'")
 
 
 def process_two(channels_in, channels_out):
@@ -81,7 +91,6 @@ def process_two(channels_in, channels_out):
             cur.execute(
                 f"UPDATE advert SET mod_time = current_timestamp, city = '{city}', country = '{country}' WHERE id = {notification.payload}"
             )
-            cur.execute(f"notify advert_channel, '{notification.payload}'")
             if notification.channel.startswith("forward"):
                 label = random.choice(channels_out)
                 cur.execute(f"notify {label}, '{notification.payload}'")
@@ -91,7 +100,6 @@ def process_tree_0(channels):
     with get_connection() as conn:
         cur = conn.cursor()
         for notification in listener(conn, channels):
-            # print(notification)
             cur.execute(f"Select * from advert where id = '{notification.payload}'")
             cur.execute(
                 f"UPDATE advert SET end_time = current_timestamp WHERE id = {notification.payload}"
@@ -127,28 +135,19 @@ def make_labels(n1, n2, n3, n4):
     )
 
 
-def main():
+def main(args):
     prepare_tables()
-    n_3_0 = 1  # 2 is faster than 3, too much processes
-    n_3_1 = 1  # 2 is faster than 3, too much processes
-    n_3_2 = 1  # 2 is faster than 3, too much processes
-    n_1 = 2
-    n_2 = 2
-
-    # n_3_0 = 1  # 2 is faster than 3, too much processes
-    # n_3_1 = 1  # 2 is faster than 3, too much processes
-    # n_3_2 = 1  # 2 is faster than 3, too much processes
-    # n_1 = 1
-    # n_2 = 1
+    num_proc = args.num_proc
+    num_proc_three = round(0.5 + num_proc / 3)
 
     q_from_1_to_3_0, q_from_1_to_3_1, q_from_1_to_2, q_from_2_to_3_2 = make_labels(
-        n_3_0, n_3_1, n_2, n_3_2
+        num_proc_three, num_proc_three, num_proc, num_proc_three
     )
 
     proc = [
         [
             Process(target=process_two, args=(q_from_1_to_2, q_from_2_to_3_2))
-            for _ in range(n_2)
+            for _ in range(num_proc)
         ],
         [Process(target=process_tree_0, args=([a],)) for a in q_from_1_to_3_0],
         [Process(target=process_tree_1, args=([a],)) for a in q_from_1_to_3_1],
@@ -156,9 +155,16 @@ def main():
         [
             Process(
                 target=process_one,
-                args=(q_from_1_to_3_0, q_from_1_to_3_1, q_from_1_to_2),
+                args=(
+                    args.num_iter,
+                    args.sleep_dur,
+                    i * 10000000,
+                    q_from_1_to_3_0,
+                    q_from_1_to_3_1,
+                    q_from_1_to_2,
+                ),
             )
-            for _ in range(n_1)
+            for i in range(num_proc)
         ],
     ]
     proc = [x for y in proc for x in y]
@@ -170,5 +176,41 @@ def main():
         p.join()
 
 
+def dump_results(args):
+    if args.results:
+        with get_connection() as conn:
+            cur = conn.cursor()
+            with open(
+                    f"{args.results}/result_{args.num_proc}_{args.num_iter}_{args.sleep_dur}.csv",
+                    "w",
+            ) as f:
+                cur.copy_expert(
+                    "Copy (Select * From advert) To STDOUT With CSV DELIMITER ',' HEADER;",
+                    f,
+                )
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--num-proc", type=int, default=5)
+    parser.add_argument("--num-iter", type=int, default=1000)
+    parser.add_argument("--sleep-dur", type=float, default=0.001)
+    parser.add_argument("--results")
+
+    print()
+
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    try:
+        main(args)
+        dump_results(args)
+    except KeyboardInterrupt:
+        dump_results(args)
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)
