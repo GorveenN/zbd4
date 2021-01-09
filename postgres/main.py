@@ -13,7 +13,7 @@ def listener(conn, channels):
     for channel in channels:
         cur.execute(f"LISTEN {channel};")
     while True:
-        if select.select([conn], [], [], 2) == ([], [], []):
+        if select.select([conn], [], [], 10) == ([], [], []):
             print("Timeout")
             break
         else:
