@@ -14,7 +14,7 @@ def listener(conn, channels):
     for channel in channels:
         cur.execute(f"LISTEN {channel};")
     while True:
-        if select.select([conn], [], [], 20) == ([], [], []):
+        if select.select([conn], [], [], 2) == ([], [], []):
             print("Timeout")
             break
         else:
@@ -129,6 +129,7 @@ def process_three(channel1, channel2):
                         emmit(cur, notification.payload)
                     else:
                         need_more_info.add(notification.payload)
+    print(need_more_info)
 
 
 def make_labels(n2, n3):

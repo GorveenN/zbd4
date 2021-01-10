@@ -10,18 +10,18 @@ import redis
 import csv
 
 
-def listener(r: redis.Redis, channels):
+def listener(r: redis.Redis, channels, timeout: float = 20.0):
     p = r.pubsub()
     p.subscribe(channels)
 
     while True:
-        message = p.get_message(timeout=2)
+        message = p.get_message(timeout=timeout)
         if message is not None:
             if not isinstance(message["data"], int):
                 yield message
         else:
-            print("timeout")
             break
+    return None
 
 
 def get_connection():
@@ -52,6 +52,13 @@ def process_one(
                         'ip', '{ip}', \
                         'seconds_in', time[1], \
                         'miliseconds_in', time[2])",
+            0,
+        )
+
+        r.eval(
+            f"redis.call('SADD', \
+                            'ads', \
+                            '{i}')",
             0,
         )
 
@@ -103,7 +110,6 @@ def process_three(channel1, channel2):
     need_more_info = set()
     r = get_connection()
     for notification in listener(r, [channel1, channel2]):
-        # print(notification)
         id_ = notification["data"]
         channel = notification["channel"]
         record = r.hgetall(f"advert:{id_}")
@@ -116,10 +122,11 @@ def process_three(channel1, channel2):
             if a == 0:
                 update(r, 0, id_)
             else:
-                if b"seconds_mid" in record.keys():
+                if "seconds_mid" in record.keys():
                     emmit(r, id_)
                 else:
                     need_more_info.add(id_)
+    print(need_more_info)
 
 
 def make_labels(n2, n3):
@@ -180,22 +187,27 @@ def dump_results(args):
     ) as f:
         writer = csv.writer(f)
         writer.writerow(["time_in", "time_mid", "time_end", "emmit_type"])
-        a = r.keys("*")
-        for x in a:
-            d = r.hgetall(x)
-            record = [
-                datetime.fromtimestamp(
-                    int(d[b"seconds_in"]) + int(d[b"miliseconds_in"]) / 1000000
-                ),
-                datetime.fromtimestamp(
-                    int(d[b"seconds_mid"]) + int(d[b"miliseconds_mid"]) / 1000000
-                ),
-                datetime.fromtimestamp(
-                    int(d[b"seconds_end"]) + int(d[b"miliseconds_end"]) / 1000000
-                ),
-                int(d[b"emmit_type"]),
-            ]
-            writer.writerow(record)
+        ads = r.smembers("ads")
+        for x in ads:
+            x = x.decode("utf-8")
+            d = r.hgetall(f"advert:{x}")
+            try:
+                record = [
+                    datetime.fromtimestamp(
+                        int(d[b"seconds_in"]) + int(d[b"miliseconds_in"]) / 1000000
+                    ),
+                    datetime.fromtimestamp(
+                        int(d[b"seconds_mid"]) + int(d[b"miliseconds_mid"]) / 1000000
+                    ),
+                    datetime.fromtimestamp(
+                        int(d[b"seconds_end"]) + int(d[b"miliseconds_end"]) / 1000000
+                    ),
+                    int(d[b"emmit_type"]),
+                ]
+                writer.writerow(record)
+            except KeyError:
+                print(x)
+                print(d)
 
 
 def parse_args():
