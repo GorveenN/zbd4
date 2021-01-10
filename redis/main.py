@@ -6,19 +6,20 @@ import os
 import random
 import numpy as np
 import redis
+import csv
 
 
 def listener(r: redis.Redis, channels):
     p = r.pubsub()
     p.subscribe(channels)
-    p.get_message()
 
     while True:
-        message = p.get_message(timeout=20)
+        message = p.get_message(timeout=10)
         if message is not None:
             if not isinstance(message["data"], int):
                 yield message
         else:
+            print("timeout")
             break
 
 
@@ -64,7 +65,6 @@ def process_two(channel):
     city = "warszawa"
     country = "polska"
     for notification in listener(get_connection(), [channel]):
-        # print(notification)
         id_, forward_channel = notification["data"].decode("utf-8").split()
         r.hgetall(f"advert:{id_}")
         r.eval(
@@ -92,27 +92,33 @@ def process_three(channel1, channel2):
             0,
         )
 
+    def emmit(r, id_):
+        [a] = np.random.choice(2, 1, p=[0.3, 0.7])
+        if a == 0:
+            update(r, 2, id_)
+        else:
+            update(r, 1, id_)
+
     need_more_info = set()
     r = get_connection()
     for notification in listener(r, [channel1, channel2]):
         # print(notification)
         id_ = notification["data"].decode("utf-8")
         channel = notification["channel"].decode("utf-8")
-        r.hgetall(f"advert:{id_}")
+        record = r.hgetall(f"advert:{id_}")
         if channel == channel2:
             if id_ in need_more_info:
                 need_more_info.remove(id_)
-                [a] = np.random.choice(2, 1, p=[0.3, 0.7])
-                if a == 0:
-                    update(r, 2, id_)
-                else:
-                    update(r, 1, id_)
+                emmit(r, id_)
         else:
             [a] = np.random.choice(2, 1, p=[0.1, 0.9])
             if a == 0:
                 update(r, 0, id_)
             else:
-                need_more_info.add(id_)
+                if b"seconds_mid" in record.keys():
+                    emmit(r, id_)
+                else:
+                    need_more_info.add(id_)
 
 
 def make_labels(n2, n3):
@@ -124,6 +130,9 @@ def make_labels(n2, n3):
 
 
 def main(args):
+    r = redis.Redis()
+    r.flushall()
+    assert len(r.keys("*")) == 0
     num_proc = args.num_proc
 
     (
@@ -163,8 +172,38 @@ def main(args):
 
 
 def dump_results(args):
-    # TODO
-    pass
+    r = redis.Redis()
+    records = [
+        "seconds_in",
+        "miliseconds_in",
+        "seconds_mid",
+        "miliseconds_mid",
+        "seconds_end",
+        "miliseconds_end",
+    ]
+
+    records_keys = [
+        b"seconds_in",
+        b"miliseconds_in",
+        b"seconds_mid",
+        b"miliseconds_mid",
+        b"seconds_end",
+        b"miliseconds_end",
+    ]
+    a = r.keys("*")
+    for x in a:
+        d = r.hgetall(x.decode("utf-8"))
+        # print(x)
+        # print(d)
+        record = [int(d[x].decode("utf-8")) for x in records_keys]
+        records.append(record)
+
+    with open(
+        f"{args.results}/result_{args.num_proc}_{args.num_iter}_{args.sleep_dur}.csv",
+        "w",
+    ) as f:
+        writer = csv.writer(f)
+        writer.writerows(records)
 
 
 def parse_args():

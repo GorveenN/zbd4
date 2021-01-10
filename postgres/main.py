@@ -102,6 +102,13 @@ def process_three(channel1, channel2):
             f"UPDATE advert SET proc_type={num}, end_time = current_timestamp WHERE id = {payload}"
         )
 
+    def emmit(cur, payload):
+        [a] = np.random.choice(2, 1, [0.3, 0.7])
+        if a == 0:
+            update(cur, 2, payload)
+        else:
+            update(cur, 1, payload)
+
     need_more_info = set()
     with get_connection() as conn:
         cur = conn.cursor()
@@ -111,17 +118,17 @@ def process_three(channel1, channel2):
                 if notification.payload in need_more_info:
                     need_more_info.remove(notification.payload)
                     [a] = np.random.choice(2, 1, [0.3, 0.7])
-                    if a == 0:
-                        update(cur, 2, notification.payload)
-                    else:
-                        update(cur, 1, notification.payload)
+                    emmit(cur, notification.payload)
             else:
                 [a] = np.random.choice(2, 1, [0.1, 0.9])
                 if a == 0:
                     update(cur, 0, notification.payload)
                 else:
-                    # check for null
-                    need_more_info.add(notification.payload)
+                    record = cur.fetchall()
+                    if record[0][4] is not None:
+                        emmit(cur, notification.payload)
+                    else:
+                        need_more_info.add(notification.payload)
 
 
 def make_labels(n2, n3):
