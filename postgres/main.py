@@ -43,10 +43,10 @@ def prepare_tables():
                 ip       inet NOT NULL,
                 city     TEXT,
                 country  TEXT,
-                in_time  timestamptz default current_timestamp,
-                mod_time timestamptz,
-                end_time timestamptz,
-                proc_type INT
+                time_in  timestamptz default current_timestamp,
+                time_mid timestamptz,
+                time_end timestamptz,
+                emmit_type INT
             );
             """
         )
@@ -91,7 +91,7 @@ def process_two(channel):
 
             cur.execute(f"Select * from advert where id = '{id_}'")
             cur.execute(
-                f"UPDATE advert SET mod_time = current_timestamp, city = '{city}', country = '{country}' WHERE id = {id_}"
+                f"UPDATE advert SET time_mid = current_timestamp, city = '{city}', country = '{country}' WHERE id = {id_}"
             )
             cur.execute(f"notify {forward_channel}, '{id_}'")
 
@@ -99,7 +99,7 @@ def process_two(channel):
 def process_three(channel1, channel2):
     def update(cur, num, payload):
         cur.execute(
-            f"UPDATE advert SET proc_type={num}, end_time = current_timestamp WHERE id = {payload}"
+            f"UPDATE advert SET emmit_type={num}, time_end = current_timestamp WHERE id = {payload}"
         )
 
     def emmit(cur, payload):
@@ -188,7 +188,7 @@ def dump_results(args):
                 "w",
             ) as f:
                 cur.copy_expert(
-                    "Copy (Select * From advert) To STDOUT With CSV DELIMITER ',' HEADER;",
+                    "Copy (Select time_in, time_mid, time_end, emmit_type From advert) To STDOUT With CSV DELIMITER ',' HEADER;",
                     f,
                 )
 

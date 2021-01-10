@@ -1,4 +1,5 @@
 from multiprocessing import Process
+from datetime import datetime
 import time
 import argparse
 import sys
@@ -14,7 +15,7 @@ def listener(r: redis.Redis, channels):
     p.subscribe(channels)
 
     while True:
-        message = p.get_message(timeout=10)
+        message = p.get_message(timeout=2)
         if message is not None:
             if not isinstance(message["data"], int):
                 yield message
@@ -24,7 +25,7 @@ def listener(r: redis.Redis, channels):
 
 
 def get_connection():
-    return redis.Redis()
+    return redis.Redis(decode_responses=True)
 
 
 def process_one(
@@ -65,7 +66,7 @@ def process_two(channel):
     city = "warszawa"
     country = "polska"
     for notification in listener(get_connection(), [channel]):
-        id_, forward_channel = notification["data"].decode("utf-8").split()
+        id_, forward_channel = notification["data"].split()
         r.hgetall(f"advert:{id_}")
         r.eval(
             f"local time = redis.call('time'); \
@@ -86,7 +87,7 @@ def process_three(channel1, channel2):
             f"local time = redis.call('time'); \
               redis.call('HMSET', \
                 'advert:{id_}', \
-                'proc_type', '{num}', \
+                'emmit_type', '{num}', \
                 'seconds_end', time[1], \
                 'miliseconds_end', time[2])",
             0,
@@ -103,8 +104,8 @@ def process_three(channel1, channel2):
     r = get_connection()
     for notification in listener(r, [channel1, channel2]):
         # print(notification)
-        id_ = notification["data"].decode("utf-8")
-        channel = notification["channel"].decode("utf-8")
+        id_ = notification["data"]
+        channel = notification["channel"]
         record = r.hgetall(f"advert:{id_}")
         if channel == channel2:
             if id_ in need_more_info:
@@ -173,37 +174,28 @@ def main(args):
 
 def dump_results(args):
     r = redis.Redis()
-    records = [
-        "seconds_in",
-        "miliseconds_in",
-        "seconds_mid",
-        "miliseconds_mid",
-        "seconds_end",
-        "miliseconds_end",
-    ]
-
-    records_keys = [
-        b"seconds_in",
-        b"miliseconds_in",
-        b"seconds_mid",
-        b"miliseconds_mid",
-        b"seconds_end",
-        b"miliseconds_end",
-    ]
-    a = r.keys("*")
-    for x in a:
-        d = r.hgetall(x.decode("utf-8"))
-        # print(x)
-        # print(d)
-        record = [int(d[x].decode("utf-8")) for x in records_keys]
-        records.append(record)
-
     with open(
         f"{args.results}/result_{args.num_proc}_{args.num_iter}_{args.sleep_dur}.csv",
         "w",
     ) as f:
         writer = csv.writer(f)
-        writer.writerows(records)
+        writer.writerow(["time_in", "time_mid", "time_end", "emmit_type"])
+        a = r.keys("*")
+        for x in a:
+            d = r.hgetall(x)
+            record = [
+                datetime.fromtimestamp(
+                    int(d[b"seconds_in"]) + int(d[b"miliseconds_in"]) / 1000000
+                ),
+                datetime.fromtimestamp(
+                    int(d[b"seconds_mid"]) + int(d[b"miliseconds_mid"]) / 1000000
+                ),
+                datetime.fromtimestamp(
+                    int(d[b"seconds_end"]) + int(d[b"miliseconds_end"]) / 1000000
+                ),
+                int(d[b"emmit_type"]),
+            ]
+            writer.writerow(record)
 
 
 def parse_args():
