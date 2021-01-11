@@ -18,6 +18,8 @@ Pojedynczy eksperyment składa się z dodania przez każdy z $n$ procesów typu 
 
 Obydwie bazy danych działały pod dockerem z flagami \codeword{---cpus="1.0" ---memory="512m"}
 
+Eksperymenty zostały przeprowadzone na komputerze z procesorem intel i5-4690k  3.50GHz oraz 8GB 2133MHz.
+
 
 
 \subsection{Działanie poszczególnych procesów}
@@ -58,22 +60,28 @@ W przypadku Redisa dane przechowywałem w hashmapie, a każdy z kluczy przechowy
 
 \subsection{Porównanie czasu obsługi w obrębie jednej bazy}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\textwidth]{./graphs/diff_in_end_postgres_all_sleeps.png}
-    \caption{Średni czas obsługi reklamy dla postgresa}
-\end{figure}
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.9\textwidth]{./graphs/diff_in_end_postgres_all_sleeps.png}
+%     \caption{Średni czas obsługi reklamy dla postgresa}
+% \end{figure}
 
 
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.9\textwidth]{./graphs/diff_in_end_redis_all_sleeps.png}
+%     \caption{Średni czas obsługi reklamy dla redisa}
+% \end{figure}
+
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\textwidth]{./graphs/diff_in_end_redis_all_sleeps.png}
-    \caption{Średni czas obsługi reklamy dla redisa}
+    \includegraphics[width=0.9\textwidth]{./graphs/diff_in_end_all_sleeps.png}
+    \caption{Średni czas obsługi reklamy}
 \end{figure}
 
 Wzrost czasu wykonania w zależności od liczby procesów jest dosyć wolny i stabilny w przypadku postgresa.
 
-Wzrost czasu wykonania w zależności od liczby procesów jest dużo bardziej gwałtowny jeżeli używamy redisa. Jak widać na wykresie czasy obsługi reklamy są dosyć stabilne, do pewnego momentu, potem opóźnienie eksploduje. Warto zauważyć, ze przed punktem degradacji wydajności, obsługa reklamy przez postgresa zajmuje mniej niż 5ms, natomiast dla postgresa są to liczby nieosiągalne przy żadnym ustawieniu.
+Wzrost czasu wykonania w zależności od liczby procesów jest dużo bardziej gwałtowny jeżeli używamy redisa. Jak widać na wykresie czasy obsługi reklamy są dosyć stabilne, do pewnego momentu, potem opóźnienie eksploduje. Warto zauważyć, ze przed punktem degradacji wydajności, obsługa reklamy przez redisa zajmuje mniej niż 5ms, natomiast dla postgresa są to liczby nieosiągalne przy żadnym ustawieniu.
 
 \begin{figure}[H]
     \centering
@@ -104,19 +112,25 @@ Redis zazwyczaj jest dużo szybszą bazą niż postgres, ale kiedy obciążenie 
 
 \subsection{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\textwidth]{./graphs/success_rate_postgres_all_sleeps.png}
-    \caption{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms dla postgresa}
-\end{figure}
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.9\textwidth]{./graphs/success_rate_postgres_all_sleeps.png}
+%     \caption{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms dla postgresa}
+% \end{figure}
+
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.9\textwidth]{./graphs/success_rate_redis_all_sleeps.png}
+%     \caption{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms dla redisa}
+% \end{figure}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\textwidth]{./graphs/success_rate_redis_all_sleeps.png}
-    \caption{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms dla redisa}
+    \includegraphics[width=0.9\textwidth]{./graphs/success_rate_all_sleeps.png}
+    \caption{Porównanie prawdopodobieństwa wyemitowania reklamy poniżej 20ms}
 \end{figure}
 
-Podobnie jak dla czasu wykonania, prawdopodobieństwo wyemitowania reklamy dla postgresa spada wolno i przewidywalnie a dla redisa, obserwuje gwałtowny skok.
+Podobnie jak dla czasu wykonania, prawdopodobieństwo wyemitowania reklamy dla postgresa spada wolno i przewidywalnie a dla redisa, obserwujemy gwałtowny skok.
 
 \begin{figure}[H]
     \centering
