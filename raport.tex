@@ -1,7 +1,6 @@
-\documentclass[polish, 10pt]{article}
+\documentclass[10pt]{article}
 \usepackage{polski}
 \input{structure.tex}
-\graphicspath{ {./graphs/} }
 \usepackage{float}
 
 \author{Piotr Karpiński}
@@ -11,7 +10,7 @@
 \begin{document}
 \maketitle
 
-\section{Procedura testowa}
+\section*{Procedura testowa}
 Wszystkie dane na temat czasów wykonania zapytań przetrzymywałem w bazie danych - zarówno dla redisa jak i postgresa.  Czasy modyfikacji tabel również były ustawiane po stronie serwera - to serwer zajmował się uzyskaniem timestampu. Taki sposób pomiaru pozwolił na wyeliminowanie problemu, w którym czas wstawienia do bazy zmierzony przez klienta mógł znacząco się różnić z rzeczywistym czasem aktualizacji tabeli - chociażby przez opóźnienie spowodowane komunikacją miedzy bazą a klientem.
 
 Pojedynczy eksperyment składa się z dodania przez każdy z $n$ procesów typu pierwszego 1000 wpisów, gdzie między dodaniem kolejnego wpisu proces usypiał na $t$ sekund. Następnie wpisy zostają obsłużone przez $n$ procesów typu drugiego i $n$ procesów typu trzeciego. Przeprowadziłem eksperymennty dla $n \in \{1..16\}$ i $t \in \{0.001, 0.003, 0.006, 0.009\}$.
@@ -21,22 +20,21 @@ Obydwie bazy danych działały pod dockerem z flagami \codeword{---cpus="1.0" --
 Eksperymenty zostały przeprowadzone na komputerze z procesorem intel i5-4690k  3.50GHz oraz 8GB 2133MHz.
 
 
-
-\subsection{Działanie poszczególnych procesów}
-\subsubsection{Proces 1}
+\subsection*{Działanie poszczególnych procesów}
+\subsubsection*{Proces 1}
 Proces ten po wstawieniu zalążka reklamy wysyła powiadomienie do losowo wybranego procesu 3, po czym wysyła powiadomienie do procesu 2, zawierając w powiadomieniu informację o tym ,który z procesów 3 otrzymał bieżącą reklamę do obsłużenia.
 
-\subsubsection{Proces 2}
+\subsubsection*{Proces 2}
 Proces drugi po otrzymaniu informacji od procesu pierwszego, uzupełnia dane w bazie, po czym wysyła powiadomienie do procesu trzeciego zajmującego się aktualnie obsługiwanym wpisem w bazie.
 
-\subsubsection{Proces 3}
+\subsubsection*{Proces 3}
 Proces trzeci po otrzymaniu informacji od procesu pierwszego może wyemitować reklamę od razu z prawdopodobieństwem 0.1, albo czeka na informację z procesu drugiego. Jeżeli proces postawił czekać, zapamiętuję \codeword{id} wpisu i czeka na powiadomienie od procesu drugiego. Po otrzymaniu dodatkowych informacji od procesu drugiego emituje reklamę z prawdopodobieństwem 0.7, w przeciwnym przypadku reklama nie jest emitowana.
 
-\subsection{Postgres}
+\subsection*{Postgres}
 
 Tabela z danymi, w której przechowywałem dane wyglądała tak:
 \begin{commandline}
-\begin{verbatim}
+    \begin{verbatim}
 create table advert (
     id          serial primary key,
     cookie      text not null,
@@ -53,25 +51,12 @@ create table advert (
 
 Do komunikacji między procesami użyłem \codeword{notify} i \codeword{listen}.
 
-\subsection{Redis}
+\subsection*{Redis}
 W przypadku Redisa dane przechowywałem w hashmapie, a każdy z kluczy przechowywałem w secie. Do komunikacji miedzy procesami skorzystałem z \codeword{publish} i \codeword{subscribe}.
 
-\section{Analiza wyników}
+\section*{Analiza wyników}
 
-\subsection{Porównanie czasu obsługi w obrębie jednej bazy}
-
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=0.9\textwidth]{./graphs/diff_in_end_postgres_all_sleeps.png}
-%     \caption{Średni czas obsługi reklamy dla postgresa}
-% \end{figure}
-
-
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=0.9\textwidth]{./graphs/diff_in_end_redis_all_sleeps.png}
-%     \caption{Średni czas obsługi reklamy dla redisa}
-% \end{figure}
+\subsection*{Porównanie czasu obsługi w obrębie jednej bazy}
 
 \begin{figure}[H]
     \centering
@@ -110,19 +95,7 @@ Wzrost czasu wykonania w zależności od liczby procesów jest dużo bardziej gw
 Redis zazwyczaj jest dużo szybszą bazą niż postgres, ale kiedy obciążenie jest bardzo wysokie, to postgres oferuję szybsza obsługę reklam. Szczególnie jest to widoczne dla $t=0.001$ i $t=0.003$.
 
 
-\subsection{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms}
-
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=0.9\textwidth]{./graphs/success_rate_postgres_all_sleeps.png}
-%     \caption{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms dla postgresa}
-% \end{figure}
-
-% \begin{figure}[H]
-%     \centering
-%     \includegraphics[width=0.9\textwidth]{./graphs/success_rate_redis_all_sleeps.png}
-%     \caption{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms dla redisa}
-% \end{figure}
+\subsection*{Prawdopodobieństwo wyemitowania reklamy poniżej 20ms}
 
 \begin{figure}[H]
     \centering
@@ -158,7 +131,7 @@ Podobnie jak dla czasu wykonania, prawdopodobieństwo wyemitowania reklamy dla p
 
 Jeżeli obciążenie bazy ma być bardzo wysokie, lepszym rozwiązaniem może być użycie postgresa zamiast redisa, jeżeli zależy nam jedynie na obsłudze zapytań poniżej 20ms a sama szybkość odpowiedzi w przy normalnym obciążeniu nie jest sprawą drugorzędna.
 
-\subsection{Szybkość obsługi reklamy w zależności od decyzji procesu trzeciego}
+\subsection*{Szybkość obsługi reklamy w zależności od decyzji procesu trzeciego}
 
 \begin{figure}[H]
     \centering
@@ -174,9 +147,7 @@ Jeżeli obciążenie bazy ma być bardzo wysokie, lepszym rozwiązaniem może by
 
 Jeżeli proces trzeci potrzebuje danych z procesu drugiego, czas obsługi wydłuża się dwukrotnie w porównaniu z procesem dla którego informacje z procesu pierwszego są wystarczające. Dla postgresa takie zachowanie utrzymuje bez różnicy na liczbę procesów połączonych z bazą. Przy dużym obciążeniu, czas obsługi zapytań przez redisa jest taki bez różnicy jaką decyzje podejmie proces trzeci.
 
-\section{Podsumowanie}
+\section*{Podsumowanie}
 Wbrew oczekiwaniom redis nie jest zawsze bazą szybszą od postgresa. Postgres zachowuje się dużo bardziej przewidywalnie od redisa i może być lepszym wyborem, jeżeli chcemy rozwiązania wolniejszego ale stabilniejszego.
-
-
 
 \end{document}
